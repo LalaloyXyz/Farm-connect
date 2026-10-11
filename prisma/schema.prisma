@@ -1,0 +1,688 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ── Enums ─────────────────────────────────────────
+
+enum Role {
+  GUEST
+  BUYER
+  FARMER
+  ADMIN
+
+  @@map("users_role")
+}
+
+enum OrderStatus {
+  PENDING
+  WAITING_PAYMENT
+  PAID
+  PREPARING
+  SHIPPING
+  READY_FOR_PICKUP
+  COMPLETED
+  CANCELLED
+  REFUNDED
+
+  @@map("orders_status")
+}
+
+enum DeliveryType {
+  ONLINE
+  PICKUP
+
+  @@map("orders_delivery_type")
+}
+
+enum ProductStatus {
+  ACTIVE
+  OUT_OF_STOCK
+  HIDDEN
+  DELETED
+
+  @@map("products_status")
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+
+  @@map("orders_payment_status")
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+
+  @@map("messages_message_type")
+}
+
+enum NotificationType {
+  ORDER
+  SYSTEM
+  PROMOTION
+
+  @@map("notifications_type")
+}
+
+enum PickupStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+
+  @@map("pickup_appointments_status")
+}
+
+// ── User / Auth ──────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid()) @map("id")
+  firstName     String    @map("first_name")
+  lastName      String    @map("last_name")
+  email         String    @unique @map("email")
+  password      String?   @map("password")
+  phone         String?   @map("phone")
+  avatar        String?   @map("avatar")
+  role          Role      @default(BUYER) @map("role")
+  emailVerified Boolean   @default(false) @map("email_verified")
+  isActive      Boolean   @default(true) @map("is_active")
+  lastLogin     DateTime? @map("last_login")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  accounts             Account[]
+  sessions             Session[]
+  farms                Farm[]
+  orders               Order[]         @relation("BuyerOrders")
+  cart                 Cart[]
+  wishlist             Wishlist[]
+  reviews              Review[]
+  conversationsAsBuyer  Conversation[] @relation("BuyerConversations")
+  conversationsAsFarmer Conversation[] @relation("FarmerConversations")
+  messages             Message[]
+  notifications        Notification[]
+  farmerFollowers      FarmerFollower[]
+  aiChatLogs           AIChatLog[]
+  activityLogs         ActivityLog[]
+  searchHistories      SearchHistory[]
+  productViews         ProductView[]
+  reportedReports      Report[] @relation("reports_reporter_idTousers")
+  handledReports       Report[] @relation("reports_handled_byTousers")
+  addresses            Address[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid()) @map("id")
+  userId            String  @map("user_id")
+  type              String  @map("type")
+  provider          String  @map("provider")
+  providerAccountId String  @map("provider_account_id")
+  refreshToken      String? @map("refresh_token") @db.Text
+  accessToken       String? @map("access_token") @db.Text
+  expiresAt         Int?    @map("expires_at")
+  tokenType         String? @map("token_type")
+  scope             String? @map("scope")
+  idToken           String? @map("id_token") @db.Text
+  sessionState      String? @map("session_state")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid()) @map("id")
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime @map("expires")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String   @map("identifier")
+  token      String   @unique @map("token")
+  expires    DateTime @map("expires")
+
+  @@map("verification_tokens")
+}
+
+// ── Farm ─────────────────────────────────────────
+
+model Farm {
+  id             String   @id @default(cuid()) @map("id")
+  farmerId       String   @unique @map("farmer_id")
+  farmName       String   @map("farm_name")
+  description    String?  @map("description") @db.Text
+  coverImage     String?  @map("cover_image")
+  latitude       Float?   @map("latitude")
+  longitude      Float?   @map("longitude")
+  address        String?  @map("address")
+  province       String?  @map("province")
+  district       String?  @map("district")
+  subdistrict    String?  @map("subdistrict")
+  postalCode     String?  @map("postal_code")
+  openingTime    String?  @map("opening_time")
+  closingTime    String?  @map("closing_time")
+  phone          String?  @map("phone")
+  facebook       String?  @map("facebook")
+  line           String?  @map("line")
+  website        String?  @map("website")
+  verified       Boolean  @default(false) @map("verified")
+  ratingAverage  Float    @default(0) @map("rating_average")
+  totalReviews   Int      @default(0) @map("total_reviews")
+  followers      Int      @default(0) @map("followers")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  farmer           User              @relation(fields: [farmerId], references: [id])
+  products         Product[]
+  orders           Order[]           @relation("FarmOrders")
+  reviews          Review[]
+  farmImages       FarmImage[]
+  farmerFollowers  FarmerFollower[]
+  farmActivities   FarmActivity[]
+  farmCertificates FarmCertificate[]
+  farmStories      FarmStory[]
+  harvestCalendars HarvestCalendar[]
+  visitBookings    VisitBooking[]
+
+  @@index([farmerId])
+  @@map("farms")
+}
+
+model FarmImage {
+  id        String  @id @default(cuid()) @map("id")
+  farmId    String  @map("farm_id")
+  imageUrl  String  @map("image_url")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId])
+  @@map("farm_images")
+}
+
+model FarmerFollower {
+  id        String   @id @default(cuid()) @map("id")
+  buyerId   String   @map("buyer_id")
+  farmId    String   @map("farm_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [buyerId], references: [id])
+  farm Farm @relation(fields: [farmId], references: [id])
+
+  @@unique([buyerId, farmId])
+  @@index([farmId])
+  @@map("farmer_followers")
+}
+
+// ── Category ─────────────────────────────────────
+
+model Category {
+  id          String  @id @default(cuid()) @map("id")
+  name        String  @map("name")
+  slug        String  @unique @map("slug")
+  icon        String? @map("icon")
+  description String? @map("description")
+  active      Boolean @default(true) @map("active")
+
+  products Product[]
+
+  @@map("categories")
+}
+
+// ── Product ──────────────────────────────────────
+
+model Product {
+  id                String        @id @default(cuid()) @map("id")
+  farmId            String        @map("farm_id")
+  categoryId        String?       @map("category_id")
+  name              String        @map("name")
+  slug              String        @unique @map("slug")
+  description       String?       @map("description") @db.Text
+  price             Float         @map("price")
+  stock             Int           @map("stock")
+  unit              String        @map("unit")
+  weight            Float?        @map("weight")
+  coverImage        String?       @map("cover_image")
+  status            ProductStatus @default(ACTIVE) @map("status")
+  rating            Float         @default(0) @map("rating")
+  sold              Int           @default(0) @map("sold")
+  viewCount         Int           @default(0) @map("view_count")
+  pickupAvailable   Boolean       @default(false) @map("pickup_available")
+  deliveryAvailable Boolean       @default(false) @map("delivery_available")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  deletedAt         DateTime?     @map("deleted_at")
+
+  farm          Farm           @relation(fields: [farmId], references: [id])
+  category      Category?      @relation(fields: [categoryId], references: [id])
+  images        ProductImage[]
+  reviews       Review[]
+  orderItems    OrderItem[]
+  cartItems     Cart[]
+  wishlistItems Wishlist[]
+  productViews  ProductView[]
+
+  @@index([farmId])
+  @@index([categoryId])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String @id @default(cuid()) @map("id")
+  productId String @map("product_id")
+  imageUrl  String @map("image_url")
+  sortOrder Int    @default(0) @map("sort_order")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+model ProductView {
+  id        String   @id @default(cuid()) @map("id")
+  productId String   @map("product_id")
+  userId    String?  @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id])
+  user    User?   @relation(fields: [userId], references: [id])
+
+  @@index([productId])
+  @@index([userId])
+  @@map("product_views")
+}
+
+// ── Cart / Wishlist ──────────────────────────────
+
+model Cart {
+  id        String   @id @default(cuid()) @map("id")
+  buyerId   String   @map("buyer_id")
+  productId String   @map("product_id")
+  quantity  Int      @default(1) @map("quantity")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [buyerId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([buyerId, productId])
+  @@map("cart")
+}
+
+model Wishlist {
+  id        String   @id @default(cuid()) @map("id")
+  buyerId   String   @map("buyer_id")
+  productId String   @map("product_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [buyerId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([buyerId, productId])
+  @@map("wishlists")
+}
+
+// ── Order ────────────────────────────────────────
+
+model Order {
+  id            String       @id @default(cuid()) @map("id")
+  orderNumber   String       @unique @map("order_number")
+  buyerId       String       @map("buyer_id")
+  farmId        String       @map("farm_id")
+  status        OrderStatus  @default(PENDING) @map("status")
+  deliveryType  DeliveryType @default(ONLINE) @map("delivery_type")
+  paymentStatus String?      @map("payment_status")
+  subtotal      Float        @map("subtotal")
+  shippingFee   Float        @default(0) @map("shipping_fee")
+  discount      Float        @default(0) @map("discount")
+  total         Float        @map("total")
+  remark        String?      @map("remark")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  deletedAt     DateTime?    @map("deleted_at")
+
+  buyer             User               @relation("BuyerOrders", fields: [buyerId], references: [id])
+  farm              Farm               @relation("FarmOrders", fields: [farmId], references: [id])
+  items             OrderItem[]
+  pickupAppointment PickupAppointment?
+  address           Address?
+  payment           Payment?
+
+  @@index([buyerId])
+  @@index([farmId])
+  @@index([orderNumber])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(cuid()) @map("id")
+  orderId   String  @map("order_id")
+  productId String  @map("product_id")
+  price     Float   @map("price")
+  quantity  Int     @map("quantity")
+  subtotal  Float   @map("subtotal")
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model PickupAppointment {
+  id         String       @id @default(cuid()) @map("id")
+  orderId    String       @unique @map("order_id")
+  pickupDate DateTime     @map("pickup_date")
+  pickupTime String       @map("pickup_time")
+  status     PickupStatus @default(PENDING) @map("status")
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("pickup_appointments")
+}
+
+model Payment {
+  id        String   @id @default(cuid()) @map("id")
+  orderId   String   @unique @map("order_id")
+  method    String?  @map("method")
+  amount    Float    @map("amount")
+  status    String?  @map("status")
+  slipImage String?  @map("slip_image")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("payments")
+}
+
+model Address {
+  id          String  @id @default(cuid()) @map("id")
+  label       String? @map("label")
+  address     String  @map("address")
+  province    String  @map("province")
+  district    String  @map("district")
+  subdistrict String  @map("subdistrict")
+  postalCode  String  @map("postal_code")
+  phone       String? @map("phone")
+  isDefault   Boolean @default(false) @map("is_default")
+  orderId     String? @unique @map("order_id")
+  buyerId     String? @map("buyer_id")
+
+  order Order? @relation(fields: [orderId], references: [id])
+  buyer User?  @relation(fields: [buyerId], references: [id])
+
+  @@map("addresses")
+}
+
+// ── Review ───────────────────────────────────────
+
+model Review {
+  id          String   @id @default(cuid()) @map("id")
+  buyerId     String   @map("buyer_id")
+  farmId      String   @map("farm_id")
+  productId   String   @map("product_id")
+  rating      Int      @map("rating")
+  comment     String?  @map("comment") @db.Text
+  images      String?  @map("images") @db.Text
+  farmerReply String?  @map("farmer_reply") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  buyer   User    @relation(fields: [buyerId], references: [id])
+  farm    Farm    @relation(fields: [farmId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([farmId])
+  @@index([productId])
+  @@index([buyerId])
+  @@map("reviews")
+}
+
+// ── Chat ─────────────────────────────────────────
+
+model Conversation {
+  id              String    @id @default(cuid()) @map("id")
+  buyerId         String    @map("buyer_id")
+  farmerId        String    @map("farmer_id")
+  lastMessage     String?   @map("last_message") @db.Text
+  lastMessageTime DateTime? @map("last_message_time")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  buyer    User      @relation("BuyerConversations", fields: [buyerId], references: [id])
+  farmer   User      @relation("FarmerConversations", fields: [farmerId], references: [id])
+  messages Message[]
+
+  @@index([buyerId])
+  @@index([farmerId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String      @id @default(cuid()) @map("id")
+  conversationId String      @map("conversation_id")
+  senderId       String      @map("sender_id")
+  message        String?     @map("message") @db.Text
+  image          String?     @map("image")
+  messageType    MessageType @default(TEXT) @map("message_type")
+  isRead         Boolean     @default(false) @map("is_read")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id])
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@map("messages")
+}
+
+// ── Notification ────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid()) @map("id")
+  userId    String           @map("user_id")
+  title     String           @map("title")
+  message   String?          @map("message") @db.Text
+  type      NotificationType @default(SYSTEM) @map("type")
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
+
+// ── Activity & AI Logs ──────────────────────────
+
+model ActivityLog {
+  id        String   @id @default(cuid()) @map("id")
+  userId    String?  @map("user_id")
+  action    String   @map("action")
+  details   String?  @map("details") @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("activity_logs")
+}
+
+model AIChatLog {
+  id        String   @id @default(cuid()) @map("id")
+  userId    String?  @map("user_id")
+  prompt    String   @map("prompt") @db.Text
+  response  String?  @map("response") @db.Text
+  tokens    Int?     @default(0) @map("tokens")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("ai_chat_logs")
+}
+
+model SearchHistory {
+  id         String   @id @default(cuid()) @map("id")
+  keyword    String   @map("keyword")
+  buyerId    String?  @map("buyer_id")
+  searchedAt DateTime @default(now()) @map("searched_at")
+
+  user User? @relation(fields: [buyerId], references: [id])
+
+  @@index([buyerId])
+  @@map("search_history")
+}
+
+// ── Extra Farm Models ───────────────────────────
+
+model FarmActivity {
+  id           String    @id @default(cuid()) @map("id")
+  farmId       String    @map("farm_id")
+  title        String    @map("title")
+  description  String?   @map("description") @db.Text
+  imageUrl     String?   @map("image_url")
+  activityDate DateTime? @map("activity_date")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId])
+  @@map("farm_activities")
+}
+
+model FarmCertificate {
+  id        String    @id @default(cuid()) @map("id")
+  farmId    String    @map("farm_id")
+  name      String    @map("name")
+  issuer    String?   @map("issuer")
+  imageUrl  String?   @map("image_url")
+  issuedAt  DateTime? @map("issued_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId])
+  @@map("farm_certificates")
+}
+
+model FarmStory {
+  id        String   @id @default(cuid()) @map("id")
+  farmId    String   @map("farm_id")
+  title     String   @map("title")
+  content   String?  @map("content") @db.Text
+  imageUrl  String?  @map("image_url")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId])
+  @@map("farm_stories")
+}
+
+model HarvestCalendar {
+  id          String   @id @default(cuid()) @map("id")
+  farmId      String   @map("farm_id")
+  productName String   @map("product_name")
+  startDate   DateTime @map("start_date")
+  endDate     DateTime @map("end_date")
+  notes       String?  @map("notes") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId])
+  @@map("harvest_calendars")
+}
+
+model VisitBooking {
+  id           String   @id @default(cuid()) @map("id")
+  farmId       String   @map("farm_id")
+  visitorName  String   @map("visitor_name")
+  visitorPhone String?  @map("visitor_phone")
+  visitDate    DateTime @map("visit_date")
+  visitTime    String?  @map("visit_time")
+  guestCount   Int      @default(1) @map("guest_count")
+  notes        String?  @map("notes") @db.Text
+  status       String   @default("PENDING") @map("status")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId])
+  @@map("visit_bookings")
+}
+
+// ── System ───────────────────────────────────────
+
+model Announcement {
+  id        String   @id @default(cuid()) @map("id")
+  title     String   @map("title")
+  content   String?  @map("content") @db.Text
+  active    Boolean  @default(true) @map("active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("announcements")
+}
+
+model Coupon {
+  id        String    @id @default(cuid()) @map("id")
+  code      String    @unique @map("code")
+  discount  Float     @map("discount")
+  type      String    @map("type")
+  minOrder  Float?    @map("min_order")
+  maxUses   Int?      @map("max_uses")
+  usedCount Int       @default(0) @map("used_count")
+  expiresAt DateTime? @map("expires_at")
+  active    Boolean   @default(true) @map("active")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@map("coupons")
+}
+
+model Report {
+  id          String   @id @default(cuid()) @map("id")
+  reporterId  String   @map("reporter_id")
+  handledBy   String?  @map("handled_by")
+  type        String   @map("type")
+  description String?  @map("description") @db.Text
+  status      String   @default("PENDING") @map("status")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  reporter User  @relation("reports_reporter_idTousers", fields: [reporterId], references: [id])
+  handler  User? @relation("reports_handled_byTousers", fields: [handledBy], references: [id])
+
+  @@map("reports")
+}
+
+model SystemSetting {
+  id    String @id @default(cuid()) @map("id")
+  key   String @unique @map("key")
+  value String @map("value") @db.Text
+
+  @@map("system_settings")
+}
